@@ -37,6 +37,7 @@
 
 using namespace strings;
 
+
 namespace impala {
 
 // Number of pinned pages required for a merge with fixed-length data only.
@@ -704,6 +705,10 @@ Sorter::Run::~Run() {
   DCHECK(!var_len_copy_page_.is_open());
 }
 
+SortingAlgorithm::type GetSortingAlgorithm(RuntimeState* state) {
+    return state->query_options().sorting_algorithm;
+  }
+
 Sorter::TupleIterator::TupleIterator(Sorter::Run* run, int64_t index)
     : index_(index), tuple_(nullptr) {
   DCHECK(run->is_finalized_);
@@ -758,7 +763,17 @@ Status Sorter::TupleSorter::Sort(Run* run) {
     RETURN_IF_ERROR(
         sort_helper_fn(this, TupleIterator::Begin(run_), TupleIterator::End(run_)));
   } else {
-    RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    // using different sorting algorithms in case of different query options
+    if (GetSortingAlgorithm(state_) == SortingAlgorithm::QUICKSORT) {
+      RETURN_IF_ERROR(StandardSortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    } else if (GetSortingAlgorithm(state_) == SortingAlgorithm::SIDE_3WAY_QSORT) {
+      RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    } else if (GetSortingAlgorithm(state_) == SortingAlgorithm::SIDE_3WAY_QSORT_COMPARE) {
+      RETURN_IF_ERROR(SortHelperCompare(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    } else if (GetSortingAlgorithm(state_) == SortingAlgorithm::ADAPTIVE_QSORT) {
+      RETURN_IF_ERROR(AdaptiveSortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    } else
+      RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
   }
   run_->set_sorted();
   return Status::OK();
@@ -1207,6 +1222,15 @@ bool Sorter::HasSpilledRuns() const {
 const char* Sorter::TupleSorter::SORTER_HELPER_SYMBOL =
     "_ZN6impala6Sorter11TupleSorter10SortHelperENS0_13TupleIteratorES2_";
 
+const char* Sorter::TupleSorter::SORTER_HELPER_COMPARE_SYMBOL =
+    "_ZN6impala6Sorter11TupleSorter17SortHelperCompareENS0_13TupleIteratorES2_";
+
+const char* Sorter::TupleSorter::STANDARD_SORTER_HELPER_SYMBOL =
+    "_ZN6impala6Sorter11TupleSorter18StandardSortHelperENS0_13TupleIteratorES2_";
+
+const char* Sorter::TupleSorter::ADAPTIVE_SORTER_HELPER_SYMBOL =
+    "_ZN6impala6Sorter11TupleSorter18AdaptiveSortHelperENS0_13TupleIteratorES2_";
+
 const char* Sorter::TupleSorter::LLVM_CLASS_NAME = "class.impala::Sorter::TupleSorter";
 
 // A method to code-gen for TupleSorter::SortHelper().
@@ -1214,18 +1238,75 @@ Status Sorter::TupleSorter::Codegen(FragmentState* state, llvm::Function* compar
     CodegenFnPtr<SortHelperFn>* codegened_fn) {
   LlvmCodeGen* codegen = state->codegen();
   DCHECK(codegen != nullptr);
+  llvm::Function* fn;
 
-  llvm::Function* fn = codegen->GetFunction(IRFunction::TUPLE_SORTER_SORT_HELPER, true);
-  DCHECK(fn != NULL);
+  if (state->query_options().sorting_algorithm == SortingAlgorithm::QUICKSORT) {
+    fn = codegen->GetFunction(IRFunction::TUPLE_SORTER_STANDARD_SORT_HELPER, true);
+    DCHECK(fn != NULL);
 
-  // There are 6 calls to Less() which calls comparator_.Less() once in each.
-  int replaced =
-      codegen->ReplaceCallSites(fn, compare_fn, TupleRowComparator::COMPARE_SYMBOL);
-  DCHECK_REPLACE_COUNT(replaced, 6) << LlvmCodeGen::Print(fn);
+    // There are 6 calls to Less() which calls comparator_.Less() once in each.
+    int replaced =
+        codegen->ReplaceCallSites(fn, compare_fn, TupleRowComparator::COMPARE_SYMBOL);
+    DCHECK_REPLACE_COUNT(replaced, 6) << LlvmCodeGen::Print(fn);
 
-  // There are 2 recursive calls within SorterHelper() to replace with.
-  replaced = codegen->ReplaceCallSites(fn, fn, SORTER_HELPER_SYMBOL);
-  DCHECK_REPLACE_COUNT(replaced, 2) << LlvmCodeGen::Print(fn);
+    // There are 2 recursive calls within StandardSorterHelper() to replace with.
+    replaced = codegen->ReplaceCallSites(fn, fn, STANDARD_SORTER_HELPER_SYMBOL);
+    DCHECK_REPLACE_COUNT(replaced, 2) << LlvmCodeGen::Print(fn);
+  }
+
+  else if (state->query_options().sorting_algorithm == SortingAlgorithm::SIDE_3WAY_QSORT) {
+    fn = codegen->GetFunction(IRFunction::TUPLE_SORTER_SORT_HELPER, true);
+    DCHECK(fn != NULL);
+
+    // There are 8? calls to Less() which calls comparator_.Less() once in each.
+    int replaced =
+        codegen->ReplaceCallSites(fn, compare_fn, TupleRowComparator::COMPARE_SYMBOL);
+    //DCHECK_REPLACE_COUNT(replaced, 8) << LlvmCodeGen::Print(fn);
+
+    // There are 2 recursive calls within SorterHelper() to replace with.
+    replaced = codegen->ReplaceCallSites(fn, fn, SORTER_HELPER_SYMBOL);
+    DCHECK_REPLACE_COUNT(replaced, 2) << LlvmCodeGen::Print(fn);
+  }
+  else if (state->query_options().sorting_algorithm == SortingAlgorithm::SIDE_3WAY_QSORT_COMPARE) {
+    fn = codegen->GetFunction(IRFunction::TUPLE_SORTER_SORT_HELPER_COMPARE, true);
+    DCHECK(fn != NULL);
+
+    // There are 8? calls to Less() which calls comparator_.Less() once in each.
+    int replaced =
+        codegen->ReplaceCallSites(fn, compare_fn, TupleRowComparator::COMPARE_SYMBOL);
+    //DCHECK_REPLACE_COUNT(replaced, 8) << LlvmCodeGen::Print(fn);
+
+    // There are 2 recursive calls within SorterHelperCompare() to replace with.
+    replaced = codegen->ReplaceCallSites(fn, fn, SORTER_HELPER_COMPARE_SYMBOL);
+    DCHECK_REPLACE_COUNT(replaced, 2) << LlvmCodeGen::Print(fn);
+  }
+  else if (state->query_options().sorting_algorithm == SortingAlgorithm::ADAPTIVE_QSORT) {
+    fn = codegen->GetFunction(IRFunction::TUPLE_SORTER_ADAPTIVE_SORT_HELPER, true);
+    DCHECK(fn != NULL);
+
+    int replaced =
+        codegen->ReplaceCallSites(fn, compare_fn, TupleRowComparator::COMPARE_SYMBOL);
+    //DCHECK_REPLACE_COUNT(replaced, 8) << LlvmCodeGen::Print(fn);
+
+    // There are 4 recursive calls within AdaptiveSorterHelper() to replace with.
+    replaced = codegen->ReplaceCallSites(fn, fn, ADAPTIVE_SORTER_HELPER_SYMBOL);
+    DCHECK_REPLACE_COUNT(replaced, 4) << LlvmCodeGen::Print(fn);
+  }
+
+  else {
+    fn = codegen->GetFunction(IRFunction::TUPLE_SORTER_SORT_HELPER, true);
+    DCHECK(fn != NULL);
+
+    // There are 8? calls to Less() which calls comparator_.Less() once in each.
+    int replaced =
+        codegen->ReplaceCallSites(fn, compare_fn, TupleRowComparator::COMPARE_SYMBOL);
+    //DCHECK_REPLACE_COUNT(replaced, 8) << LlvmCodeGen::Print(fn);
+
+    // There are 2 recursive calls within SorterHelper() to replace with.
+    replaced = codegen->ReplaceCallSites(fn, fn, SORTER_HELPER_SYMBOL);
+    DCHECK_REPLACE_COUNT(replaced, 2) << LlvmCodeGen::Print(fn);
+  }
+  
 
   fn = codegen->FinalizeFunction(fn);
   if (fn == nullptr) {

@@ -379,6 +379,7 @@ class Sorter::TupleIterator {
   /// arguments to avoid redundantly storing the same values in multiple iterators in
   /// perf-critical algorithms.
   void IR_ALWAYS_INLINE Next(Sorter::Run* run, int tuple_size);
+  void IR_ALWAYS_INLINE Seek(Sorter::Run* run, int tuple_size, int64_t index);
 
   /// The reverse of Next(). Can advance one before the first tuple in the run, but it
   /// is invalid to dereference 'tuple_' in that case.
@@ -446,21 +447,34 @@ class Sorter::TupleSorter {
   static Status Codegen(FragmentState* state, llvm::Function* compare_fn,
       CodegenFnPtr<SortHelperFn>* codegend_fn);
 
-  /// Mangled name of SorterHelper().
+  /// Mangled name of SorterHelper() which performs 3way quicksort.
   static const char* SORTER_HELPER_SYMBOL;
+
+  /// Mangled name of SorterHelper() which performs 3way quicksort with Compare().
+  static const char* SORTER_HELPER_COMPARE_SYMBOL;
+
+  /// Mangled name of StandardSortHelper() which performs 2way quicksort.
+  static const char* STANDARD_SORTER_HELPER_SYMBOL;
+
+  /// Mangled name of AdaptiveSortHelper() which performs hibrid quicksort.
+  static const char* ADAPTIVE_SORTER_HELPER_SYMBOL;
 
   /// Class name in LLVM IR.
   static const char* LLVM_CLASS_NAME;
 
  private:
   static const int INSERTION_THRESHOLD = 16;
+  // If the number of tuples to be sorted is less, pivot is chosen from 3
+  // candidates, else the pivot is the median of 3 randomly chosen tuples
+  static const int SELECTION_THRESHOLD = 1000;
 
   Sorter* const parent_;
 
   /// Size of the tuples in memory.
   const int tuple_size_;
 
-  /// Tuple comparator with method Less() that returns true if lhs < rhs.
+  /// Tuple comparator with method Less() that returns true if lhs < rhs
+  /// and Method Equal() that returns true if lhs = rhs.
   const TupleRowComparator& comparator_;
 
   /// Number of times comparator_.Less() can be invoked again before
@@ -487,6 +501,18 @@ class Sorter::TupleSorter {
   /// on every 'state_->batch_size()' invocations of comparator_.Less(). Returns true
   /// if 'lhs' is less than 'rhs'.
   bool IR_ALWAYS_INLINE Less(const TupleRow* lhs, const TupleRow* rhs);
+  /// Wrapper around comparator_.Equal(). Also call expr_results_pool_.Clear()
+  /// on every 'state_->batch_size()' invocations of comparator_.Equal(). Returns 
+  /// true if 'lhs' is equal to 'rhs'.
+  bool IR_ALWAYS_INLINE Equal(const TupleRow* lhs, const TupleRow* rhs);
+  int IR_ALWAYS_INLINE Compare(const TupleRow* lhs, const TupleRow* rhs);
+
+  ///Check if the given interval is already sorted
+  bool CheckSorted(TupleIterator begin, TupleIterator end);
+
+  ///Compares every tuple that are nSkip distance away and returns true if they are all  
+  ///in proper order
+  bool ProbeSorted(TupleIterator begin, TupleIterator end, int64_t nSkip);
 
   /// Perform an insertion sort for rows in the range [begin, end) in a run.
   /// Only valid to call for ranges of size at least 1.
@@ -499,16 +525,48 @@ class Sorter::TupleSorter {
   /// groups and the index to the first element in the second group is returned in
   /// 'cut'. Return an error status if any error is encountered or if the query is
   /// cancelled.
-  Status IR_ALWAYS_INLINE Partition(TupleIterator begin, TupleIterator end,
+  Status IR_ALWAYS_INLINE StandardPartition(TupleIterator begin, TupleIterator end,
       const Tuple* pivot, TupleIterator* cut);
+
+  /// Partitions the sequence of tuples in the range [begin, end) in a run into three
+  /// groups around the pivot tuple - i.e. tuples in first group are < the pivot, 
+  /// tuples in the second group are = pivot and
+  /// tuples in the third group are > pivot. Tuples are swapped in place to create the
+  /// groups and the index to the first element in the second group is returned in
+  /// 'cut_right' and the index to the first element in the third group is returned in
+  /// 'cut_left'. Return an error status if any error is encountered or if the query is
+  /// cancelled.
+  Status IR_ALWAYS_INLINE Partition(TupleIterator begin, TupleIterator end,
+      const Tuple* pivot, TupleIterator* cut_left, TupleIterator* cut_right);
+
+  Status IR_ALWAYS_INLINE PartitionCompare(TupleIterator begin, TupleIterator end,
+      const Tuple* pivot, TupleIterator* cut_left, TupleIterator* cut_right);
 
   /// Performs a quicksort of rows in the range [begin, end) followed by insertion sort
   /// for smaller groups of elements. Return an error status for any errors or if the
   /// query is cancelled.
+  Status StandardSortHelper(TupleIterator begin, TupleIterator end);
+
+  /// Performs 3way quicksort of rows in the range [begin, end) followed by insertion sort
+  /// for smaller groups of elements. Return an error status for any errors or if the
+  /// query is cancelled.
   Status SortHelper(TupleIterator begin, TupleIterator end);
 
-  /// Select a pivot to partition [begin, end).
+  Status SortHelperCompare(TupleIterator begin, TupleIterator end);
+
+  /// Performs a hibrid quicksort of rows in the range [begin, end) based on the number
+  /// of duplicates found during pivot selection. If duplicates found, the current
+  /// iteration uses 3way partition. If all selected tuples are unique values,
+  /// it poartitions 2way as usual. This is followed by insertion sort
+  /// for smaller groups of elements. Return an error status for any errors or if the
+  /// query is cancelled.
+  Status AdaptiveSortHelper(TupleIterator begin, TupleIterator end);
+
+  /// Select a pivot to partition [begin, end) from 3 randomly chosen tuples
   Tuple* IR_ALWAYS_INLINE SelectPivot(TupleIterator begin, TupleIterator end);
+
+  /// Select a pivot to partition [begin, end) from 9 randomly chosen tuples
+  Tuple* IR_ALWAYS_INLINE SelectPivot9(TupleIterator begin, TupleIterator end);
 
   /// Return median of three tuples according to the sort comparator.
   Tuple* IR_ALWAYS_INLINE MedianOfThree(Tuple* t1, Tuple* t2, Tuple* t3);

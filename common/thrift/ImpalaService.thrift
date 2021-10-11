@@ -706,6 +706,17 @@ enum TImpalaQueryOptions {
   // Number of minimum consecutive rows when filtered out, will avoid materialization
   // of columns in parquet. Set it to -1 to turn off late materialization feature.
   PARQUET_LATE_MATERIALIZATION_THRESHOLD = 138;
+
+  // Options for different sorting algorithms used in sort nodes.
+  //     QUICKSORT                 - Original standard 2way quicksort.
+  //     SIDE_3WAY_QSORT           - 3way quicksort when equal tuples are put to the sides
+  //                                 using Less() and Equal()
+  //     SIDE_3WAY_QSORT_COMPARE   - 3way quicksort when equal tuples are put to the sides
+  //                                 using Compare()
+  //     MIDDLE_3WAY_QSORT         - 3way quicksort where equals are kept in the middle
+  //     ADAPTIVE_QSORT            - adaptive 2-3way quicksort based on pivot selection
+  SORTING_ALGORITHM = 139
+
 }
 
 // The summary of a DML statement.

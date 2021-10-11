@@ -106,6 +106,7 @@ PRINT_THRIFT_ENUM_IMPL(TMinmaxFilteringLevel)
 PRINT_THRIFT_ENUM_IMPL(TKuduReplicaSelection)
 PRINT_THRIFT_ENUM_IMPL(TMinmaxFilterFastCodePathMode)
 PRINT_THRIFT_ENUM_IMPL(TParquetBloomFilterWrite)
+PRINT_THRIFT_ENUM_IMPL(SortingAlgorithm)
 
 string PrintId(const TUniqueId& id, const string& separator) {
   stringstream out;

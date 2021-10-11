@@ -1118,6 +1118,13 @@ Status impala::SetQueryOption(const string& key, const string& value,
         query_options->__set_enable_kudu_transaction(IsTrue(value));
         break;
       }
+      case TImpalaQueryOptions::SORTING_ALGORITHM: {
+        SortingAlgorithm::type enum_type;
+        RETURN_IF_ERROR(GetThriftEnum(value, "Sorting algorithm",
+           _SortingAlgorithm_VALUES_TO_NAMES, &enum_type));
+        query_options->__set_sorting_algorithm(enum_type);
+        break;
+      }
       case TImpalaQueryOptions::MINMAX_FILTER_PARTITION_COLUMNS: {
         query_options->__set_minmax_filter_partition_columns(IsTrue(value));
         break;

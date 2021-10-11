@@ -143,6 +143,10 @@ class TupleRowComparator {
     return Compare(lhs_row, rhs_row);
   }
 
+  int ALWAYS_INLINE Compare2(const TupleRow* lhs, const TupleRow* rhs) const {
+    return Compare(ordering_expr_evals_lhs_.data(), ordering_expr_evals_rhs_.data(), lhs, rhs);
+  }
+
   /// Returns true if lhs is strictly less than rhs.
   /// All exprs (ordering_exprs_lhs_ and ordering_exprs_rhs_) must have been prepared
   /// and opened before calling this.
@@ -158,6 +162,22 @@ class TupleRowComparator {
     TupleRow* lhs_row = reinterpret_cast<TupleRow*>(&lhs);
     TupleRow* rhs_row = reinterpret_cast<TupleRow*>(&rhs);
     return Less(lhs_row, rhs_row);
+  }
+  /// Returns true if lhs is equal to rhs.
+  /// All exprs (ordering_exprs_lhs_ and ordering_exprs_rhs_) must have been prepared
+  /// and opened before calling this.
+  /// Force inlining because it tends not to be always inlined at callsites, even in
+  /// hot loops.
+  bool ALWAYS_INLINE Equal(const TupleRow* lhs, const TupleRow* rhs) const {
+    return Compare(
+               ordering_expr_evals_lhs_.data(), ordering_expr_evals_rhs_.data(), lhs, rhs)
+        == 0;
+  }
+
+  bool ALWAYS_INLINE Equal(const Tuple* lhs, const Tuple* rhs) const {
+    TupleRow* lhs_row = reinterpret_cast<TupleRow*>(&lhs);
+    TupleRow* rhs_row = reinterpret_cast<TupleRow*>(&rhs);
+    return Equal(lhs_row, rhs_row);
   }
 
   /// A Symbol (or a substring of the symbol) of following.
