@@ -487,6 +487,7 @@ class Sorter::TupleSorter {
   /// on every 'state_->batch_size()' invocations of comparator_.Less(). Returns true
   /// if 'lhs' is less than 'rhs'.
   bool IR_ALWAYS_INLINE Less(const TupleRow* lhs, const TupleRow* rhs);
+  bool IR_ALWAYS_INLINE Equal(const TupleRow* lhs, const TupleRow* rhs);
 
   /// Perform an insertion sort for rows in the range [begin, end) in a run.
   /// Only valid to call for ranges of size at least 1.
@@ -500,7 +501,7 @@ class Sorter::TupleSorter {
   /// 'cut'. Return an error status if any error is encountered or if the query is
   /// cancelled.
   Status IR_ALWAYS_INLINE Partition(TupleIterator begin, TupleIterator end,
-      const Tuple* pivot, TupleIterator* cut);
+      const Tuple* pivot, TupleIterator* cut_left, TupleIterator* cut_right);
 
   /// Performs a quicksort of rows in the range [begin, end) followed by insertion sort
   /// for smaller groups of elements. Return an error status for any errors or if the

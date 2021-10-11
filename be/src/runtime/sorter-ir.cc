@@ -75,9 +75,19 @@ bool IR_ALWAYS_INLINE Sorter::TupleSorter::Less(
   }
   return comparator_.Less(lhs, rhs);
 }
+bool IR_ALWAYS_INLINE Sorter::TupleSorter::Equal(
+    const TupleRow* lhs, const TupleRow* rhs) {
+  --num_comparisons_till_free_;
+  DCHECK_GE(num_comparisons_till_free_, 0);
+  if (UNLIKELY(num_comparisons_till_free_ == 0)) {
+    parent_->expr_results_pool_.Clear();
+    num_comparisons_till_free_ = state_->batch_size();
+  }
+  return comparator_.Equal(lhs, rhs);
+}
 
 Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
-    TupleIterator end, const Tuple* pivot, TupleIterator* cut) {
+    TupleIterator end, const Tuple* pivot, TupleIterator* cut_left, TupleIterator* cut_right) {
   // Hoist member variable lookups out of loop to avoid extra loads inside loop.
   Run* run = run_;
   int tuple_size = tuple_size_;
@@ -92,6 +102,10 @@ Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
   TupleIterator left = begin;
   TupleIterator right = end;
   right.Prev(run, tuple_size); // Set 'right' to the last tuple in range.
+
+  TupleIterator equals_left = begin;
+  TupleIterator equals_right = end;
+
   while (true) {
     // Search for the first and last out-of-place elements, and swap them.
     while (Less(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
@@ -110,7 +124,21 @@ Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
     RETURN_IF_CANCELLED(state_);
     RETURN_IF_ERROR(state_->GetQueryStatus());
   }
-  *cut = left;
+
+  // Move equal tuples to the left and right side respectively.
+  if (Equal(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+    Swap(equals_left.tuple(), left.tuple(), swap_tuple, tuple_size);
+    equals_left.Next(run, tuple_size);
+  }
+  if (Equal(right.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+    equals_right.Prev(run, tuple_size);
+    Swap(equals_right.tuple(), right.tuple(), swap_tuple, tuple_size);
+  }
+
+
+  *cut_left = left;
+  right.Next(run, tuple_size);
+  *cut_right = right;
   return Status::OK();
 }
 
@@ -163,22 +191,24 @@ Status IR_ALWAYS_INLINE Sorter::TupleSorter::InsertionSort(const TupleIterator& 
 Status Sorter::TupleSorter::SortHelper(TupleIterator begin, TupleIterator end) {
   // Use insertion sort for smaller sequences.
   while (end.index() - begin.index() > INSERTION_THRESHOLD) {
-    // Select a pivot and call Partition() to split the tuples in [begin, end) into two
-    // groups (<= pivot and >= pivot) in-place. 'cut' is the index of the first tuple in
-    // the second group.
+    // Select a pivot and call Partition() to split the tuples in [begin, end) into three
+    // groups (< pivot, == pivot, and >= pivot) in-place. 'cut_left' and 'cut_right' are
+    // the indices of the first tuple in the second and first tuple in the third group.
+    // The second group contains the equal elements, thus already sorted.
     Tuple* pivot = SelectPivot(begin, end);
-    TupleIterator cut;
-    RETURN_IF_ERROR(Partition(begin, end, pivot, &cut));
+    TupleIterator cut_left;
+    TupleIterator cut_right;
+    RETURN_IF_ERROR(Partition(begin, end, pivot, &cut_left, &cut_right));
 
     // Recurse on the smaller partition. This limits stack size to log(n) stack frames.
-    if (cut.index() - begin.index() < end.index() - cut.index()) {
+    if (cut_left.index() - begin.index() < end.index() - cut_right.index()) {
       // Left partition is smaller.
-      RETURN_IF_ERROR(SortHelper(begin, cut));
-      begin = cut;
+      RETURN_IF_ERROR(SortHelper(begin, cut_left));
+      begin = cut_right;
     } else {
       // Right partition is equal or smaller.
-      RETURN_IF_ERROR(SortHelper(cut, end));
-      end = cut;
+      RETURN_IF_ERROR(SortHelper(cut_right, end));
+      end = cut_left;
     }
   }
 
