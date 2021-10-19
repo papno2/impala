@@ -37,6 +37,8 @@
 
 using namespace strings;
 
+DECLARE_bool(sort_with_side_3way_qsort);
+
 namespace impala {
 
 // Number of pinned pages required for a merge with fixed-length data only.
@@ -704,6 +706,10 @@ Sorter::Run::~Run() {
   DCHECK(!var_len_copy_page_.is_open());
 }
 
+SortingAlgorithm::type GetSortingAlgorithm(RuntimeState* state) {
+    return state->query_options().sorting_algorithm;
+  }
+
 Sorter::TupleIterator::TupleIterator(Sorter::Run* run, int64_t index)
     : index_(index), tuple_(nullptr) {
   DCHECK(run->is_finalized_);
@@ -758,6 +764,7 @@ Status Sorter::TupleSorter::Sort(Run* run) {
     RETURN_IF_ERROR(
         sort_helper_fn(this, TupleIterator::Begin(run_), TupleIterator::End(run_)));
   } else {
+    // using different sorting algorithms in case of different flags
     RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
   }
   run_->set_sorted();
@@ -1221,7 +1228,7 @@ Status Sorter::TupleSorter::Codegen(FragmentState* state, llvm::Function* compar
   // There are 6 calls to Less() which calls comparator_.Less() once in each.
   int replaced =
       codegen->ReplaceCallSites(fn, compare_fn, TupleRowComparator::COMPARE_SYMBOL);
-  DCHECK_REPLACE_COUNT(replaced, 6) << LlvmCodeGen::Print(fn);
+  DCHECK_REPLACE_COUNT(replaced, 8) << LlvmCodeGen::Print(fn);
 
   // There are 2 recursive calls within SorterHelper() to replace with.
   replaced = codegen->ReplaceCallSites(fn, fn, SORTER_HELPER_SYMBOL);

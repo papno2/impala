@@ -99,6 +99,18 @@ enum TParquetBloomFilterWrite {
   ALWAYS
 }
 
+// Options for different sorting algorithms used in sort nodes.
+enum SortingAlgorithm {
+  // Original standard quicksort.
+  QUICKSORT,
+
+  // 3way quicksort when equal tuples are put to the sides
+  SIDE_3WAY_QSORT,
+
+  // 3way quicksort where equals are kept in the middle
+  MIDDLE_3WAY_QSORT
+}
+
 // constants for TQueryOptions.num_nodes
 const i32 NUM_NODES_ALL = 0
 const i32 NUM_NODES_ALL_RACKS = -1
@@ -549,6 +561,10 @@ struct TQueryOptions {
 
   // Indicates whether to use ORC's search argument to push down predicates.
   136: optional bool orc_read_statistics = true;
+
+  // See comment in ImpalaService.thrift
+  137: optional SortingAlgorithm sorting_algorithm =
+      SortingAlgorithm.QUICKSORT;
 }
 
 // Impala currently has three types of sessions: Beeswax, HiveServer2 and external

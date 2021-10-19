@@ -696,6 +696,13 @@ enum TImpalaQueryOptions {
 
   // Indicates whether to use ORC's search argument to push down predicates.
   ORC_READ_STATISTICS = 135
+
+  // Options for different sorting algorithms used in sort nodes.
+  //     QUICKSORT         - Original standard quicksort.
+  //     SIDE_3WAY_QSORT   - 3way quicksort when equal tuples are put to the sides
+  //     MIDDLE_3WAY_QSORT - 3way quicksort where equals are kept in the middle
+  SORTING_ALGORITHM = 136
+
 }
 
 // The summary of a DML statement.

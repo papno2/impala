@@ -23,6 +23,11 @@
 #include "runtime/runtime-state.h"
 #include "util/runtime-profile-counters.h"
 
+DEFINE_bool(sort_with_side_3way_qsort, false,
+    "Use 3way quicksort in sort nodes where equals are moved to the sides first");
+
+DECLARE_bool(sort_with_side_3way_qsort);
+
 namespace  impala {
 
 void IR_ALWAYS_INLINE Sorter::TupleIterator::NextPage(Sorter::Run* run) {
@@ -86,6 +91,8 @@ bool IR_ALWAYS_INLINE Sorter::TupleSorter::Equal(
   return comparator_.Equal(lhs, rhs);
 }
 
+////////////////////////////////Beginning of side 3way quicksort/////////////////////////////
+
 Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
     TupleIterator end, const Tuple* pivot, TupleIterator* cut_left, TupleIterator* cut_right) {
   // Hoist member variable lookups out of loop to avoid extra loads inside loop.
@@ -142,6 +149,38 @@ Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
   return Status::OK();
 }
 
+
+Status Sorter::TupleSorter::SortHelper(TupleIterator begin, TupleIterator end) {
+  // Use insertion sort for smaller sequences.
+  while (end.index() - begin.index() > INSERTION_THRESHOLD) {
+    // Select a pivot and call Partition() to split the tuples in [begin, end) into three
+    // groups (< pivot, == pivot, and >= pivot) in-place. 'cut_left' and 'cut_right' are
+    // the indices of the first tuple in the second and first tuple in the third group.
+    // The second group contains the equal elements, thus already sorted.
+    Tuple* pivot = SelectPivot(begin, end);
+    TupleIterator cut_left;
+    TupleIterator cut_right;
+    RETURN_IF_ERROR(Partition(begin, end, pivot, &cut_left, &cut_right));
+
+    // Recurse on the smaller partition. This limits stack size to log(n) stack frames.
+    if (cut_left.index() - begin.index() < end.index() - cut_right.index()) {
+      // Left partition is smaller.
+      RETURN_IF_ERROR(SortHelper(begin, cut_left));
+      begin = cut_right;
+    } else {
+      // Right partition is equal or smaller.
+      RETURN_IF_ERROR(SortHelper(cut_right, end));
+      end = cut_left;
+    }
+  }
+
+  if (begin.index() < end.index()) RETURN_IF_ERROR(InsertionSort(begin, end));
+  return Status::OK();
+}
+
+///////////////////////////////Beginning of standard quicksort////////////////////////
+
+
 // Sort the sequence of tuples from [begin, last).
 // Begin with a sorted sequence of size 1 [begin, begin+1).
 // During each pass of the outermost loop, add the next tuple (at position 'i') to
@@ -184,35 +223,6 @@ Status IR_ALWAYS_INLINE Sorter::TupleSorter::InsertionSort(const TupleIterator& 
   }
   RETURN_IF_CANCELLED(state_);
   RETURN_IF_ERROR(state_->GetQueryStatus());
-  return Status::OK();
-}
-
-
-Status Sorter::TupleSorter::SortHelper(TupleIterator begin, TupleIterator end) {
-  // Use insertion sort for smaller sequences.
-  while (end.index() - begin.index() > INSERTION_THRESHOLD) {
-    // Select a pivot and call Partition() to split the tuples in [begin, end) into three
-    // groups (< pivot, == pivot, and >= pivot) in-place. 'cut_left' and 'cut_right' are
-    // the indices of the first tuple in the second and first tuple in the third group.
-    // The second group contains the equal elements, thus already sorted.
-    Tuple* pivot = SelectPivot(begin, end);
-    TupleIterator cut_left;
-    TupleIterator cut_right;
-    RETURN_IF_ERROR(Partition(begin, end, pivot, &cut_left, &cut_right));
-
-    // Recurse on the smaller partition. This limits stack size to log(n) stack frames.
-    if (cut_left.index() - begin.index() < end.index() - cut_right.index()) {
-      // Left partition is smaller.
-      RETURN_IF_ERROR(SortHelper(begin, cut_left));
-      begin = cut_right;
-    } else {
-      // Right partition is equal or smaller.
-      RETURN_IF_ERROR(SortHelper(cut_right, end));
-      end = cut_left;
-    }
-  }
-
-  if (begin.index() < end.index()) RETURN_IF_ERROR(InsertionSort(begin, end));
   return Status::OK();
 }
 
