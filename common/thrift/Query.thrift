@@ -564,7 +564,7 @@ struct TQueryOptions {
 
   // See comment in ImpalaService.thrift
   137: optional SortingAlgorithm sorting_algorithm =
-      SortingAlgorithm.QUICKSORT;
+      SortingAlgorithm.SIDE_3WAY_QSORT;
 }
 
 // Impala currently has three types of sessions: Beeswax, HiveServer2 and external

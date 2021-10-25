@@ -764,8 +764,15 @@ Status Sorter::TupleSorter::Sort(Run* run) {
     RETURN_IF_ERROR(
         sort_helper_fn(this, TupleIterator::Begin(run_), TupleIterator::End(run_)));
   } else {
-    // using different sorting algorithms in case of different flags
-    RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    // using different sorting algorithms in case of different query options
+    if (GetSortingAlgorithm(state_) == SortingAlgorithm::QUICKSORT) {
+      RETURN_IF_ERROR(StandardSortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    }
+    if (GetSortingAlgorithm(state_) == SortingAlgorithm::SIDE_3WAY_QSORT) {
+      RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    }
+    else
+      RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
   }
   run_->set_sorted();
   return Status::OK();

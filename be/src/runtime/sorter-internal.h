@@ -500,10 +500,26 @@ class Sorter::TupleSorter {
   /// groups and the index to the first element in the second group is returned in
   /// 'cut'. Return an error status if any error is encountered or if the query is
   /// cancelled.
+  Status IR_ALWAYS_INLINE StandardPartition(TupleIterator begin, TupleIterator end,
+      const Tuple* pivot, TupleIterator* cut);
+
+  /// Partitions the sequence of tuples in the range [begin, end) in a run into three
+  /// groups around the pivot tuple - i.e. tuples in first group are < the pivot, 
+  /// tuples in the second group are = pivot and
+  /// tuples in the third group are > pivot. Tuples are swapped in place to create the
+  /// groups and the index to the first element in the second group is returned in
+  /// 'cut_right' and the index to the first element in the third group is returned in
+  /// 'cut_left'. Return an error status if any error is encountered or if the query is
+  /// cancelled.
   Status IR_ALWAYS_INLINE Partition(TupleIterator begin, TupleIterator end,
       const Tuple* pivot, TupleIterator* cut_left, TupleIterator* cut_right);
 
   /// Performs a quicksort of rows in the range [begin, end) followed by insertion sort
+  /// for smaller groups of elements. Return an error status for any errors or if the
+  /// query is cancelled.
+  Status StandardSortHelper(TupleIterator begin, TupleIterator end);
+
+  /// Performs 3way quicksort of rows in the range [begin, end) followed by insertion sort
   /// for smaller groups of elements. Return an error status for any errors or if the
   /// query is cancelled.
   Status SortHelper(TupleIterator begin, TupleIterator end);

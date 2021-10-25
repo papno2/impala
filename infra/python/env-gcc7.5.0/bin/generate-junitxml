@@ -1,0 +1,12 @@
+#!/home/noemi/impala/infra/python/env-gcc7.5.0/bin/python
+# EASY-INSTALL-ENTRY-SCRIPT: 'impala-py-lib','console_scripts','generate-junitxml'
+__requires__ = 'impala-py-lib'
+import re
+import sys
+from pkg_resources import load_entry_point
+
+if __name__ == '__main__':
+    sys.argv[0] = re.sub(r'(-script\.pyw?|\.exe)?$', '', sys.argv[0])
+    sys.exit(
+        load_entry_point('impala-py-lib', 'console_scripts', 'generate-junitxml')()
+    )

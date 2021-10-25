@@ -126,22 +126,36 @@ Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
     // Swap first and last tuples.
     Swap(left.tuple(), right.tuple(), swap_tuple, tuple_size);
 
+    // Move equal tuples to the left and right side respectively.
+    if (Equal(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+      Swap(equals_left.tuple(), left.tuple(), swap_tuple, tuple_size);
+      equals_left.Next(run, tuple_size);
+    }
+    if (Equal(right.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+      equals_right.Prev(run, tuple_size);
+      Swap(equals_right.tuple(), right.tuple(), swap_tuple, tuple_size);
+    }
+
     left.Next(run, tuple_size);
     right.Prev(run, tuple_size);
     RETURN_IF_CANCELLED(state_);
     RETURN_IF_ERROR(state_->GetQueryStatus());
   }
 
-  // Move equal tuples to the left and right side respectively.
-  if (Equal(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+  if(left.index() == right.index()) {
+    DCHECK(Equal(reinterpret_cast<TupleRow*>(&temp_tuple), right.row()));
+  }
+  // Move equal columns from the sides to the pivot
+  while(equals_left.index() > begin.index()) {
+    equals_left.Prev(run, tuple_size);
+    left.Prev(run, tuple_size);
     Swap(equals_left.tuple(), left.tuple(), swap_tuple, tuple_size);
-    equals_left.Next(run, tuple_size);
   }
-  if (Equal(right.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
-    equals_right.Prev(run, tuple_size);
+  while (equals_right.index() < end.index()) {
+    right.Next(run, tuple_size);
     Swap(equals_right.tuple(), right.tuple(), swap_tuple, tuple_size);
+    equals_right.Next(run, tuple_size);
   }
-
 
   *cut_left = left;
   right.Next(run, tuple_size);
@@ -180,6 +194,72 @@ Status Sorter::TupleSorter::SortHelper(TupleIterator begin, TupleIterator end) {
 
 ///////////////////////////////Beginning of standard quicksort////////////////////////
 
+Status IR_ALWAYS_INLINE Sorter::TupleSorter::StandardPartition(TupleIterator begin,
+    TupleIterator end, const Tuple* pivot, TupleIterator* cut) {
+  // Hoist member variable lookups out of loop to avoid extra loads inside loop.
+  Run* run = run_;
+  int tuple_size = tuple_size_;
+  Tuple* temp_tuple = reinterpret_cast<Tuple*>(temp_tuple_buffer_);
+  Tuple* swap_tuple = reinterpret_cast<Tuple*>(swap_buffer_);
+
+  // Copy pivot into temp_tuple since it points to a tuple within [begin, end).
+  DCHECK(temp_tuple != nullptr);
+  DCHECK(pivot != nullptr);
+  memcpy(temp_tuple, pivot, tuple_size);
+
+  TupleIterator left = begin;
+  TupleIterator right = end;
+  right.Prev(run, tuple_size); // Set 'right' to the last tuple in range.
+  while (true) {
+    // Search for the first and last out-of-place elements, and swap them.
+    while (Less(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+      left.Next(run, tuple_size);
+    }
+    while (Less(reinterpret_cast<TupleRow*>(&temp_tuple), right.row())) {
+      right.Prev(run, tuple_size);
+    }
+
+    if (left.index() >= right.index()) break;
+    // Swap first and last tuples.
+    Swap(left.tuple(), right.tuple(), swap_tuple, tuple_size);
+
+    left.Next(run, tuple_size);
+    right.Prev(run, tuple_size);
+    RETURN_IF_CANCELLED(state_);
+    RETURN_IF_ERROR(state_->GetQueryStatus());
+  }
+  *cut = left;
+  return Status::OK();
+}
+
+
+Status Sorter::TupleSorter::StandardSortHelper(TupleIterator begin, TupleIterator end) {
+  // Use insertion sort for smaller sequences.
+  while (end.index() - begin.index() > INSERTION_THRESHOLD) {
+    // Select a pivot and call Partition() to split the tuples in [begin, end) into two
+    // groups (<= pivot and >= pivot) in-place. 'cut' is the index of the first tuple in
+    // the second group.
+    Tuple* pivot = SelectPivot(begin, end);
+    TupleIterator cut;
+    RETURN_IF_ERROR(StandardPartition(begin, end, pivot, &cut));
+
+    // Recurse on the smaller partition. This limits stack size to log(n) stack frames.
+    if (cut.index() - begin.index() < end.index() - cut.index()) {
+      // Left partition is smaller.
+      RETURN_IF_ERROR(StandardSortHelper(begin, cut));
+      begin = cut;
+    } else {
+      // Right partition is equal or smaller.
+      RETURN_IF_ERROR(StandardSortHelper(cut, end));
+      end = cut;
+    }
+  }
+
+  if (begin.index() < end.index()) RETURN_IF_ERROR(InsertionSort(begin, end));
+  return Status::OK();
+}
+
+///////////////////////////////End of standard quicksort////////////////////////
 
 // Sort the sequence of tuples from [begin, last).
 // Begin with a sorted sequence of size 1 [begin, begin+1).
