@@ -446,8 +446,11 @@ class Sorter::TupleSorter {
   static Status Codegen(FragmentState* state, llvm::Function* compare_fn,
       CodegenFnPtr<SortHelperFn>* codegend_fn);
 
-  /// Mangled name of SorterHelper().
+  /// Mangled name of SorterHelper() which performs 3way quicksort.
   static const char* SORTER_HELPER_SYMBOL;
+
+  /// Mangled name of StandardSortHelper() which performs 2way quicksort.
+  static const char* STANDARD_SORTER_HELPER_SYMBOL;
 
   /// Class name in LLVM IR.
   static const char* LLVM_CLASS_NAME;

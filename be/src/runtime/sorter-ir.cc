@@ -168,7 +168,7 @@ Status Sorter::TupleSorter::SortHelper(TupleIterator begin, TupleIterator end) {
   // Use insertion sort for smaller sequences.
   while (end.index() - begin.index() > INSERTION_THRESHOLD) {
     // Select a pivot and call Partition() to split the tuples in [begin, end) into three
-    // groups (< pivot, == pivot, and >= pivot) in-place. 'cut_left' and 'cut_right' are
+    // groups (< pivot, == pivot, and > pivot) in-place. 'cut_left' and 'cut_right' are
     // the indices of the first tuple in the second and first tuple in the third group.
     // The second group contains the equal elements, thus already sorted.
     Tuple* pivot = SelectPivot(begin, end);
