@@ -91,6 +91,17 @@ bool IR_ALWAYS_INLINE Sorter::TupleSorter::Equal(
   return comparator_.Equal(lhs, rhs);
 }
 
+int IR_ALWAYS_INLINE Sorter::TupleSorter::Compare(
+  const TupleRow* lhs, const TupleRow* rhs) {
+  --num_comparisons_till_free_;
+  DCHECK_GE(num_comparisons_till_free_, 0);
+  if (UNLIKELY(num_comparisons_till_free_ == 0)) {
+    parent_->expr_results_pool_.Clear();
+    num_comparisons_till_free_ = state_->batch_size();
+  }
+  return comparator_.Compare(lhs, rhs);
+}
+
 ////////////////////////////////Beginning of side 3way quicksort/////////////////////////////
 
 Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
@@ -115,26 +126,47 @@ Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
 
   while (true) {
     // Search for the first and last out-of-place elements, and swap them.
-    while (Less(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+    while (left.index() <= right.index()) {
+      int cmp = Compare(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple));
+      if (cmp > 0) {
+        break;
+      } else if (cmp == 0) {
+        Swap(equals_left.tuple(), left.tuple(), swap_tuple, tuple_size);
+        equals_left.Next(run, tuple_size);
+      }  
       left.Next(run, tuple_size);
     }
-    while (Less(reinterpret_cast<TupleRow*>(&temp_tuple), right.row())) {
+
+    while (left.index() <= right.index()) {
+      int cmp = Compare(reinterpret_cast<TupleRow*>(&temp_tuple), right.row());
+      if (cmp > 0) {
+        break;
+      } else if (cmp == 0) {
+        equals_right.Prev(run, tuple_size);
+        Swap(equals_right.tuple(), right.tuple(), swap_tuple, tuple_size);
+      }  
       right.Prev(run, tuple_size);
     }
+    //while (Less(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+    //  left.Next(run, tuple_size);
+    //}
+    //while (Less(reinterpret_cast<TupleRow*>(&temp_tuple), right.row())) {
+    //  right.Prev(run, tuple_size);
+    //}
 
     if (left.index() >= right.index()) break;
     // Swap first and last tuples.
     Swap(left.tuple(), right.tuple(), swap_tuple, tuple_size);
 
     // Move equal tuples to the left and right side respectively.
-    if (Equal(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
-      Swap(equals_left.tuple(), left.tuple(), swap_tuple, tuple_size);
-      equals_left.Next(run, tuple_size);
-    }
-    if (Equal(right.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
-      equals_right.Prev(run, tuple_size);
-      Swap(equals_right.tuple(), right.tuple(), swap_tuple, tuple_size);
-    }
+    //if (Equal(left.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+    //  Swap(equals_left.tuple(), left.tuple(), swap_tuple, tuple_size);
+    //  equals_left.Next(run, tuple_size);
+    //}
+    //if (Equal(right.row(), reinterpret_cast<TupleRow*>(&temp_tuple))) {
+    //  equals_right.Prev(run, tuple_size);
+    //  Swap(equals_right.tuple(), right.tuple(), swap_tuple, tuple_size);
+    //}
 
     left.Next(run, tuple_size);
     right.Prev(run, tuple_size);

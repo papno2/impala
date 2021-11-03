@@ -463,7 +463,8 @@ class Sorter::TupleSorter {
   /// Size of the tuples in memory.
   const int tuple_size_;
 
-  /// Tuple comparator with method Less() that returns true if lhs < rhs.
+  /// Tuple comparator with method Less() that returns true if lhs < rhs
+  /// and Method Equal() that returns true if lhs = rhs.
   const TupleRowComparator& comparator_;
 
   /// Number of times comparator_.Less() can be invoked again before
@@ -490,7 +491,11 @@ class Sorter::TupleSorter {
   /// on every 'state_->batch_size()' invocations of comparator_.Less(). Returns true
   /// if 'lhs' is less than 'rhs'.
   bool IR_ALWAYS_INLINE Less(const TupleRow* lhs, const TupleRow* rhs);
+  /// Wrapper around comparator_.Equal(). Also call expr_results_pool_.Clear()
+  /// on every 'state_->batch_size()' invocations of comparator_.Equal(). Returns 
+  /// true if 'lhs' is equal to 'rhs'.
   bool IR_ALWAYS_INLINE Equal(const TupleRow* lhs, const TupleRow* rhs);
+  int IR_ALWAYS_INLINE Compare(const TupleRow* lhs, const TupleRow* rhs);
 
   /// Perform an insertion sort for rows in the range [begin, end) in a run.
   /// Only valid to call for ranges of size at least 1.
