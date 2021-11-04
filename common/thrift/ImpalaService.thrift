@@ -698,9 +698,12 @@ enum TImpalaQueryOptions {
   ORC_READ_STATISTICS = 135
 
   // Options for different sorting algorithms used in sort nodes.
-  //     QUICKSORT         - Original standard quicksort.
-  //     SIDE_3WAY_QSORT   - 3way quicksort when equal tuples are put to the sides
-  //     MIDDLE_3WAY_QSORT - 3way quicksort where equals are kept in the middle
+  //     QUICKSORT                 - Original standard 2way quicksort.
+  //     SIDE_3WAY_QSORT           - 3way quicksort when equal tuples are put to the sides
+  //                                 using Less() and Equal()
+  //     SIDE_3WAY_QSORT_COMPARE   - 3way quicksort when equal tuples are put to the sides
+  //                                 using Compare()
+  //     MIDDLE_3WAY_QSORT         - 3way quicksort where equals are kept in the middle
   SORTING_ALGORITHM = 136
 
 }

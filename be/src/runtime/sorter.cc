@@ -37,7 +37,6 @@
 
 using namespace strings;
 
-DECLARE_bool(sort_with_side_3way_qsort);
 
 namespace impala {
 
@@ -769,6 +768,8 @@ Status Sorter::TupleSorter::Sort(Run* run) {
       RETURN_IF_ERROR(StandardSortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
     } else if (GetSortingAlgorithm(state_) == SortingAlgorithm::SIDE_3WAY_QSORT) {
       RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
+    } else if (GetSortingAlgorithm(state_) == SortingAlgorithm::SIDE_3WAY_QSORT_COMPARE) {
+      RETURN_IF_ERROR(SortHelperCompare(TupleIterator::Begin(run_), TupleIterator::End(run_)));
     }
     else
       RETURN_IF_ERROR(SortHelper(TupleIterator::Begin(run_), TupleIterator::End(run_)));
@@ -1220,6 +1221,9 @@ bool Sorter::HasSpilledRuns() const {
 const char* Sorter::TupleSorter::SORTER_HELPER_SYMBOL =
     "_ZN6impala6Sorter11TupleSorter10SortHelperENS0_13TupleIteratorES2_";
 
+const char* Sorter::TupleSorter::SORTER_HELPER_COMPARE_SYMBOL =
+    "_ZN6impala6Sorter11TupleSorter17SortHelperCompareENS0_13TupleIteratorES2_";
+
 const char* Sorter::TupleSorter::STANDARD_SORTER_HELPER_SYMBOL =
     "_ZN6impala6Sorter11TupleSorter18StandardSortHelperENS0_13TupleIteratorES2_";
 
@@ -1257,6 +1261,19 @@ Status Sorter::TupleSorter::Codegen(FragmentState* state, llvm::Function* compar
 
     // There are 2 recursive calls within SorterHelper() to replace with.
     replaced = codegen->ReplaceCallSites(fn, fn, SORTER_HELPER_SYMBOL);
+    DCHECK_REPLACE_COUNT(replaced, 2) << LlvmCodeGen::Print(fn);
+  }
+  else if (state->query_options().sorting_algorithm == SortingAlgorithm::SIDE_3WAY_QSORT_COMPARE) {
+    fn = codegen->GetFunction(IRFunction::TUPLE_SORTER_SORT_HELPER_COMPARE, true);
+    DCHECK(fn != NULL);
+
+    // There are 8? calls to Less() which calls comparator_.Less() once in each.
+    int replaced =
+        codegen->ReplaceCallSites(fn, compare_fn, TupleRowComparator::COMPARE_SYMBOL);
+    //DCHECK_REPLACE_COUNT(replaced, 8) << LlvmCodeGen::Print(fn);
+
+    // There are 2 recursive calls within SorterHelper() to replace with.
+    replaced = codegen->ReplaceCallSites(fn, fn, SORTER_HELPER_COMPARE_SYMBOL);
     DCHECK_REPLACE_COUNT(replaced, 2) << LlvmCodeGen::Print(fn);
   }
 

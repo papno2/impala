@@ -101,11 +101,14 @@ enum TParquetBloomFilterWrite {
 
 // Options for different sorting algorithms used in sort nodes.
 enum SortingAlgorithm {
-  // Original standard quicksort.
+  // Original standard 2way quicksort.
   QUICKSORT,
 
-  // 3way quicksort when equal tuples are put to the sides
+  // 3way quicksort when equal tuples are put to the sides using Less() and Equal()
   SIDE_3WAY_QSORT,
+
+  // 3way quicksort when equal tuples are put to the sides using Compare()
+  SIDE_3WAY_QSORT_COMPARE,
 
   // 3way quicksort where equals are kept in the middle
   MIDDLE_3WAY_QSORT

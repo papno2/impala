@@ -449,6 +449,9 @@ class Sorter::TupleSorter {
   /// Mangled name of SorterHelper() which performs 3way quicksort.
   static const char* SORTER_HELPER_SYMBOL;
 
+  /// Mangled name of SorterHelper() which performs 3way quicksort with Compare().
+  static const char* SORTER_HELPER_COMPARE_SYMBOL;
+
   /// Mangled name of StandardSortHelper() which performs 2way quicksort.
   static const char* STANDARD_SORTER_HELPER_SYMBOL;
 
@@ -522,6 +525,9 @@ class Sorter::TupleSorter {
   Status IR_ALWAYS_INLINE Partition(TupleIterator begin, TupleIterator end,
       const Tuple* pivot, TupleIterator* cut_left, TupleIterator* cut_right);
 
+  Status IR_ALWAYS_INLINE PartitionCompare(TupleIterator begin, TupleIterator end,
+      const Tuple* pivot, TupleIterator* cut_left, TupleIterator* cut_right);
+
   /// Performs a quicksort of rows in the range [begin, end) followed by insertion sort
   /// for smaller groups of elements. Return an error status for any errors or if the
   /// query is cancelled.
@@ -531,6 +537,8 @@ class Sorter::TupleSorter {
   /// for smaller groups of elements. Return an error status for any errors or if the
   /// query is cancelled.
   Status SortHelper(TupleIterator begin, TupleIterator end);
+
+  Status SortHelperCompare(TupleIterator begin, TupleIterator end);
 
   /// Select a pivot to partition [begin, end).
   Tuple* IR_ALWAYS_INLINE SelectPivot(TupleIterator begin, TupleIterator end);

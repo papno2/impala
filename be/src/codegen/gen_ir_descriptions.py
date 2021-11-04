@@ -252,6 +252,8 @@ ir_functions = [
    "_ZN6impala19GetKuduPartitionRowEPN4kudu6client15KuduPartitionerEPNS0_14KuduPartialRowE"],
   ["TUPLE_SORTER_SORT_HELPER",
    "_ZN6impala6Sorter11TupleSorter10SortHelperENS0_13TupleIteratorES2_"],
+  ["TUPLE_SORTER_SORT_HELPER_COMPARE",
+   "_ZN6impala6Sorter11TupleSorter17SortHelperCompareENS0_13TupleIteratorES2_"],
   ["TUPLE_SORTER_STANDARD_SORT_HELPER",
    "_ZN6impala6Sorter11TupleSorter18StandardSortHelperENS0_13TupleIteratorES2_"],
 ]
