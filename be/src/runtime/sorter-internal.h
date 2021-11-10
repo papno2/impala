@@ -379,6 +379,7 @@ class Sorter::TupleIterator {
   /// arguments to avoid redundantly storing the same values in multiple iterators in
   /// perf-critical algorithms.
   void IR_ALWAYS_INLINE Next(Sorter::Run* run, int tuple_size);
+  void IR_ALWAYS_INLINE Seek(Sorter::Run* run, int tuple_size, int64_t index);
 
   /// The reverse of Next(). Can advance one before the first tuple in the run, but it
   /// is invalid to dereference 'tuple_' in that case.
@@ -499,6 +500,11 @@ class Sorter::TupleSorter {
   /// true if 'lhs' is equal to 'rhs'.
   bool IR_ALWAYS_INLINE Equal(const TupleRow* lhs, const TupleRow* rhs);
   int IR_ALWAYS_INLINE Compare(const TupleRow* lhs, const TupleRow* rhs);
+
+  ///Check if the given interval is already sorted
+  bool CheckSorted(TupleIterator begin, TupleIterator end);
+
+  bool ProbeSorted(TupleIterator begin, TupleIterator end, int64_t nSkip);
 
   /// Perform an insertion sort for rows in the range [begin, end) in a run.
   /// Only valid to call for ranges of size at least 1.

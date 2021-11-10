@@ -57,6 +57,21 @@ void IR_ALWAYS_INLINE Sorter::TupleIterator::Next(Sorter::Run* run, int tuple_si
   if (UNLIKELY(index_ >= buffer_end_index_)) NextPage(run);
 }
 
+void IR_ALWAYS_INLINE Sorter::TupleIterator::Seek(Sorter::Run* run, int tuple_size, int64_t index) {
+  DCHECK_LT(index, run->num_tuples()) << "Can only advance one past end of run";
+  if(index < buffer_start_index_ || index >= buffer_end_index_) {
+    page_index_ = index / run->page_capacity_;
+    DCHECK_LT(page_index_, run->fixed_len_pages_.size());
+    // If the last page is full, position to the last page instead
+    if(page_index_ == run->fixed_len_pages_.size()) --page_index_;
+    buffer_start_index_ = page_index_ * run->page_capacity_;
+    buffer_end_index_ = buffer_start_index_ + run->page_capacity_;
+  }
+
+  index_ = index;
+  tuple_ = run->fixed_len_pages_[page_index_].data() + (tuple_size * (index_ - buffer_start_index_));
+}
+
 // IMPALA-3816: Function is not inlined into Partition() without IR_ALWAYS_INLINE hint.
 void IR_ALWAYS_INLINE Sorter::TupleIterator::Prev(Sorter::Run* run, int tuple_size) {
   DCHECK_GE(index_, 0) << "Can only advance one before start of run";
@@ -98,6 +113,42 @@ int IR_ALWAYS_INLINE Sorter::TupleSorter::Compare(
   return comparator_.Compare(lhs, rhs);
 }
 
+//////////////////////////Beginning of checksorted////////////////////////
+
+
+bool Sorter::TupleSorter::ProbeSorted(TupleIterator begin, TupleIterator end,
+    int64_t nSkip) {
+  Run* run = run_;
+  int tuple_size = tuple_size_;
+  for (;;) {
+    int64_t seekIndex = begin.index() + nSkip;
+    if(seekIndex + nSkip >= end.index()) { // Last probe in range
+      seekIndex = end.index() - 1; // Seek to last record instead
+    }
+    const Tuple* prev = begin.tuple();
+    begin.Seek(run, tuple_size, seekIndex);
+    if (Less(begin.row(), reinterpret_cast<TupleRow*>(&prev))) return false;
+    if (seekIndex + 1 >= end.index()) return true;
+  }
+}
+
+bool Sorter::TupleSorter::CheckSorted(TupleIterator begin, TupleIterator end) {
+  LOG(INFO) << "CheckSorted called";
+  Run* run = run_;
+  int tuple_size = tuple_size_;
+  int64_t nRecs = end.index() - begin.index();
+  if(nRecs <= 1) return true;
+  int64_t checkInterval = nRecs / 100; // 1%
+  if(checkInterval < 10) checkInterval = 10;
+  if (!ProbeSorted(begin, end, checkInterval)) return false;
+
+  for (;;) {
+    const Tuple* prev = begin.tuple();
+    begin.Next(run, tuple_size);
+    if (begin.index() >= end.index()) return true;
+    if (Less(begin.row(), reinterpret_cast<TupleRow*>(&prev))) return false;
+  }
+}
 
 ///////////////////Beginning of side 3way quicksort with less and equal///////////////////
 
@@ -175,6 +226,7 @@ Status IR_ALWAYS_INLINE Sorter::TupleSorter::Partition(TupleIterator begin,
 
 
 Status Sorter::TupleSorter::SortHelper(TupleIterator begin, TupleIterator end) {
+  //if (CheckSorted(begin, end)) return Status::OK();
   // Use insertion sort for smaller sequences.
   while (end.index() - begin.index() > INSERTION_THRESHOLD) {
     // Select a pivot and call Partition() to split the tuples in [begin, end) into three
