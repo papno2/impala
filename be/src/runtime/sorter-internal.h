@@ -504,6 +504,8 @@ class Sorter::TupleSorter {
   ///Check if the given interval is already sorted
   bool CheckSorted(TupleIterator begin, TupleIterator end);
 
+  ///Compares every tuple that are nSkip distance away and returns true if they are all  
+  ///in proper order
   bool ProbeSorted(TupleIterator begin, TupleIterator end, int64_t nSkip);
 
   /// Perform an insertion sort for rows in the range [begin, end) in a run.
