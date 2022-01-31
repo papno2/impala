@@ -134,7 +134,8 @@ class TupleRowComparator {
   void Close(RuntimeState* state);
 
   int ALWAYS_INLINE Compare(const TupleRow* lhs, const TupleRow* rhs) const {
-    return Compare(nullptr, nullptr, lhs, rhs);
+    return Compare(
+            ordering_expr_evals_lhs_.data(), ordering_expr_evals_rhs_.data(), lhs, rhs);
   }
 
   int ALWAYS_INLINE Compare(const Tuple* lhs, const Tuple* rhs) const {
