@@ -141,6 +141,13 @@ class Sorter::Run {
   /// var-len data into var_len_copy_page_.
   Status Init();
 
+  /// Initialize the run for input rows by allocating the minimum number of required
+  /// pages - one page for fixed-len data added to fixed_len_pages_, one for the
+  /// initially unsorted var-len data added to var_len_pages_, and one to copy sorted
+  /// var-len data into var_len_copy_page_. Returns true if initialization succesful,
+  /// returns false, if reservation was not enough.
+  Status TryInit(bool* succes);
+
   /// Add the rows from 'batch' starting at 'start_index' to the current run. Returns
   /// the number of rows actually added in 'num_processed'. If the run is full (no more
   /// pages can be allocated), 'num_processed' may be less than the number of remaining
@@ -199,6 +206,10 @@ class Sorter::Run {
   bool is_finalized() const { return is_finalized_; }
   bool is_sorted() const { return is_sorted_; }
   void set_sorted() { is_sorted_ = true; }
+  int max_num_of_pages() const { return max_num_of_pages_; }
+  int fixed_len_size() {return fixed_len_pages_.size();}
+  int run_size() {return fixed_len_pages_.size() + var_len_pages_.size() +
+        + has_var_len_slots_;}
   int64_t num_tuples() const { return num_tuples_; }
   /// Returns true if we have var-len pages in the run.
   bool HasVarLenPages() const {
@@ -215,8 +226,7 @@ class Sorter::Run {
   /// INITIAL_RUN and HAS_VAR_LEN_SLOTS are template arguments for performance and must
   /// match 'initial_run_' and 'has_var_len_slots_'.
   template <bool HAS_VAR_LEN_SLOTS, bool INITIAL_RUN>
-  Status AddBatchInternal(
-      RowBatch* batch, int start_index, int* num_processed);
+  Status AddBatchInternal(RowBatch* batch, int start_index, int* num_processed);
 
   /// Finalize the list of pages: delete empty final pages and unpin the previous page
   /// if the run is unpinned.
@@ -304,6 +314,9 @@ class Sorter::Run {
   /// True if the tuples in the run are currently in sorted order.
   /// Always true for intermediate runs.
   bool is_sorted_;
+
+  /// Max number of fixed-len  pages in an in-memory minirun
+  int max_num_of_pages_;
 
   /// Sequence of pages in this run containing the fixed-length portion of the sort
   /// tuples comprising this run. The data pointed to by the var-len slots are in

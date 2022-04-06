@@ -594,6 +594,13 @@ struct TQueryOptions {
 
   // See comment in ImpalaService.thrift
   147: optional TSchemaResolutionStrategy orc_schema_resolution = 0;
+
+  // Maximum number of fixed-length pages in an initial in-memory minirun
+  // 0 means unlimited, which will create 1 run, as in the previous implementation
+  148: optional i32 run_size = 20;
+
+  // Sets whether sort_run_bytes_limit should be applied to the first initial run
+  149: optional bool limit_sort_run_bytes_initially = false;
 }
 
 // Impala currently has three types of sessions: Beeswax, HiveServer2 and external
