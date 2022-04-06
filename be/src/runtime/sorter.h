@@ -104,7 +104,7 @@ class Sorter {
   /// 'enable_spilling' should be set to false to reduce the number of requested buffers
   /// if the caller will use AddBatchNoSpill().
   /// 'codegend_sort_helper_fn' is a reference to the codegen version of
-  /// the Sorter::TupleSorter::SortHelp() method.
+  /// the Sorter::TupleSorter::SortHelper() method.
   /// 'estimated_input_size' is the total rows in bytes that are estimated to get added
   /// into this sorter. This is used to decide if sorter needs to proactively spill for
   /// the first run. -1 value means estimate is unavailable.
@@ -167,8 +167,32 @@ class Sorter {
   class Page;
   class Run;
 
-  /// Minimum value for sot_run_bytes_limit query option.
+  /// Minimum value for sort_run_bytes_limit query option.
   static const int64_t MIN_SORT_RUN_BYTES_LIMIT = 32 << 20; // 32 MB
+
+  /// Create a SortedRunMerger from sorted runs in 'sorted_inmem_runs_' and assign it to
+  /// 'inmem_merger_'. 'num_runs' indicates how many runs should be covered by the current
+  /// merging attempt. Returns error if memory allocation fails during in
+  /// Run::PrepareRead().
+  /// TODO: The runs to be merged are removed from 'sorted_runs_'. The
+  /// Sorter sets the 'deep_copy_input' flag to true for the merger, since the pages
+  /// containing input run data will be deleted as input runs are read.
+  Status CreateInmemoryMerger() WARN_UNUSED_RESULT;
+
+  /// Merges multiple smaller runs in sorted_inmem_runs_ into a single larger merged
+  /// run that can be spilled page by page during the process, until all pages from
+  /// sorted_inmem_runs are consumed and freed.
+  /// Returns when 'merger_' is set up to merge the final runs. If the number of sorted
+  /// runs is too large, merge sets of smaller runs into large runs until a final merge
+  /// can be performed. An intermediate row batch containing deep copied rows is used for
+  /// the output of each intermediate merge.
+  Status MergeInmemoryRuns() WARN_UNUSED_RESULT;
+
+  /// Execute a single step of the in-memory merge, pulling rows from 'inmem_merger_'
+  /// and adding them to 'merged_run'.
+  Status ExecuteInmemoryMerge(Sorter::Run* merged_run)
+        WARN_UNUSED_RESULT;
+
 
   /// Create a SortedRunMerger from sorted runs in 'sorted_runs_' and assign it to
   /// 'merger_'. 'num_runs' indicates how many runs should be covered by the current
@@ -189,6 +213,9 @@ class Sorter {
   /// Execute a single step of the intermediate merge, pulling rows from 'merger_'
   /// and adding them to 'merged_run'.
   Status ExecuteIntermediateMerge(Sorter::Run* merged_run) WARN_UNUSED_RESULT;
+
+  /// handle cases in AddBatch where memory limit is reached and must start spilling
+  inline Status MergeAndSpill() WARN_UNUSED_RESULT;
 
   /// Called once there no more rows to be added to 'unsorted_run_'. Sorts
   /// 'unsorted_run_' and appends it to the list of sorted runs.
@@ -290,10 +317,23 @@ class Sorter {
   /// When it is added to sorted_runs_, it is set to NULL.
   Run* unsorted_run_;
 
+  /// List of quicksorted miniruns before merging in memory
+  std::deque<Run*> sorted_inmem_runs_;
+
   /// List of sorted runs that have been produced but not merged. unsorted_run_ is added
   /// to this list after an in-memory sort. Sorted runs produced by intermediate merges
   /// are also added to this list during the merge. Runs are added to the object pool.
   std::deque<Run*> sorted_runs_;
+
+  /// Merger object used to produce sorted runs from in-memory small (mini)runs.
+  /// Only one merge is performed at a time. Always one level
+  /// Will serve GetNext() if the input fits in memory.
+  boost::scoped_ptr<SortedRunMerger> inmem_merger_;
+
+  /// In-memory miniruns runs that are currently processed by the inmem_merge_.
+  /// Pages from these runs can be deleted immediately when we are done with
+  /// a page in the current merge.
+  std::deque<Run*> merging_inmem_runs_;
 
   /// Merger object (intermediate or final) currently used to produce sorted runs.
   /// Only one merge is performed at a time. Will never be used if the input fits in
@@ -333,6 +373,9 @@ class Sorter {
   /// Time spent sorting initial runs in memory.
   RuntimeProfile::Counter* in_mem_sort_timer_;
 
+  /// Time spent merging initial runs in memory.
+  RuntimeProfile::Counter* in_mem_merge_timer_;
+
   /// Total size of the initial runs in bytes.
   RuntimeProfile::Counter* sorted_data_size_;
 
@@ -341,6 +384,8 @@ class Sorter {
 
   /// Flag to enforce sort_run_bytes_limit.
   bool enforce_sort_run_bytes_limit_ = false;
+
+  bool try_add_page_failed_ = false;
 };
 
 } // namespace impala

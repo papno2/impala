@@ -736,6 +736,14 @@ enum TImpalaQueryOptions {
 
   // Determines how to resolve ORC files' schemas. Valid values are "position" and "name".
   ORC_SCHEMA_RESOLUTION = 146;
+  
+  // Maximum number of pages in an initial in-memory minirun
+  // 0 means unlimited, which will create 1 big run, as in the previous implementation
+  RUN_SIZE = 147
+
+  // Sets enforce_sort_run_bytes_limit true from the beginning
+  LIMIT_SORT_RUN_BYTES_INITIALLY = 148
+
 }
 
 // The summary of a DML statement.

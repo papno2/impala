@@ -1229,6 +1229,14 @@ Status impala::SetQueryOption(const string& key, const string& value,
         query_options->__set_orc_schema_resolution(enum_type);
         break;
       }
+      case TImpalaQueryOptions::RUN_SIZE: {
+        query_options->__set_run_size(atoi(value.c_str()));
+        break;
+      }
+      case TImpalaQueryOptions::LIMIT_SORT_RUN_BYTES_INITIALLY: {
+        query_options->__set_limit_sort_run_bytes_initially(IsTrue(value));
+        break;
+      }
       default:
         if (IsRemovedQueryOption(key)) {
           LOG(WARNING) << "Ignoring attempt to set removed query option '" << key << "'";

@@ -491,7 +491,7 @@ public class SortNode extends PlanNode {
       perInstanceMemEstimate = fullInputSize < 0 ?
           mem_limit :
           Math.min((long) Math.ceil(fullInputSize), mem_limit);
-      perInstanceMinMemReservation = bufferSize * pageMultiplier;
+      perInstanceMinMemReservation = 3 * bufferSize * pageMultiplier;
     } else {
       Preconditions.checkState(type_ == TSortType.TOTAL ||
           type_ == TSortType.PARTITIONED_TOPN);
