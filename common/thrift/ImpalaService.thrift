@@ -733,6 +733,14 @@ enum TImpalaQueryOptions {
 
   // Maximum wait time on HMS ACID lock in seconds.
   LOCK_MAX_WAIT_TIME_S = 145
+
+  // Maximum number of pages in an initial in-memory minirun
+  // 0 means unlimited, which will create 1 big run, as in the previous implementation
+  RUN_SIZE = 146
+
+  // Sets enforce_sort_run_bytes_limit true from the beginning
+  LIMIT_SORT_RUN_BYTES_INITIALLY = 147
+
 }
 
 // The summary of a DML statement.

@@ -50,7 +50,7 @@ typedef std::unordered_map<string, beeswax::TQueryOptionLevel::type>
 // time we add or remove a query option to/from the enum TImpalaQueryOptions.
 #define QUERY_OPTS_TABLE\
   DCHECK_EQ(_TImpalaQueryOptions_VALUES_TO_NAMES.size(),\
-      TImpalaQueryOptions::LOCK_MAX_WAIT_TIME_S + 1);\
+      TImpalaQueryOptions::RUN_SIZE+ 2);\
   REMOVED_QUERY_OPT_FN(abort_on_default_limit_exceeded, ABORT_ON_DEFAULT_LIMIT_EXCEEDED)\
   QUERY_OPT_FN(abort_on_error, ABORT_ON_ERROR, TQueryOptionLevel::REGULAR)\
   REMOVED_QUERY_OPT_FN(allow_unsupported_formats, ALLOW_UNSUPPORTED_FORMATS)\
@@ -282,6 +282,11 @@ typedef std::unordered_map<string, beeswax::TQueryOptionLevel::type>
   QUERY_OPT_FN(test_replan, TEST_REPLAN,\
       TQueryOptionLevel::ADVANCED)\
   QUERY_OPT_FN(lock_max_wait_time_s, LOCK_MAX_WAIT_TIME_S, TQueryOptionLevel::REGULAR)\
+  QUERY_OPT_FN(run_size, RUN_SIZE,\
+      TQueryOptionLevel::DEVELOPMENT)\
+  QUERY_OPT_FN(limit_sort_run_bytes_initially, LIMIT_SORT_RUN_BYTES_INITIALLY,\
+      TQueryOptionLevel::DEVELOPMENT)\
+
   ;
 
 /// Enforce practical limits on some query options to avoid undesired query state.
