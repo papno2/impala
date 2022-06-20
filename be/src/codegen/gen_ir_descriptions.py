@@ -260,6 +260,8 @@ ir_functions = [
    "_ZN6impala19GetKuduPartitionRowEPN4kudu6client15KuduPartitionerEPNS0_14KuduPartialRowE"],
    ["TUPLE_SORTER_SORT_HELPER",
    "_ZN6impala6Sorter11TupleSorter10SortHelperENS0_13TupleIteratorES2_"],
+  ["SORTED_RUN_MERGER_HEAPIFY_HELPER",
+   "_ZN6impala15SortedRunMerger13HeapifyHelperEi"]
 ]
 
 enums_preamble = '\

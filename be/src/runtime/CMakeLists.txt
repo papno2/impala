@@ -75,6 +75,7 @@ add_library(Runtime
   runtime-state.cc
   scanner-mem-limiter.cc
   sorted-run-merger.cc
+  sorted-run-merger-ir.cc
   sorter.cc
   sorter-ir.cc
   spillable-row-batch-queue.cc

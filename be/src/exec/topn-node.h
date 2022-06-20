@@ -115,6 +115,9 @@ class TopNPlanNode : public PlanNode {
 
   /// Codegened version of Sort::TupleSorter::SortHelper().
   CodegenFnPtr<Sorter::SortHelperFn> codegend_sort_helper_fn_;
+
+  /// Codegened version of SortedRunMerger::HeapifyHelper().
+  CodegenFnPtr<SortedRunMerger::HeapifyHelperFn> codegend_heapify_helper_fn_;
 };
 
 /// Node for in-memory TopN operator that sorts input tuples and applies a limit such

@@ -44,6 +44,9 @@ class PartialSortPlanNode : public PlanNode {
 
   /// Codegened version of Sort::TupleSorter::SortHelper().
   CodegenFnPtr<Sorter::SortHelperFn> codegend_sort_helper_fn_;
+
+  /// Codegened version of SortedRunMerger::HeapifyHelper().
+  CodegenFnPtr<SortedRunMerger::HeapifyHelperFn> codegend_heapify_helper_fn_;
 };
 
 /// Node that implements a partial sort, where its input is divided up into runs, each

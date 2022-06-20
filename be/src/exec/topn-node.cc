@@ -197,7 +197,7 @@ Status TopNNode::Prepare(RuntimeState* state) {
     sorter_.reset(new Sorter(*pnode.ordering_comparator_config_, pnode.noop_tuple_exprs_,
         &row_descriptor_, mem_tracker(), buffer_pool_client(),
         resource_profile_.spillable_buffer_size, runtime_profile(), state, label(),
-        true, pnode.codegend_sort_helper_fn_));
+        true, pnode.codegend_sort_helper_fn_, pnode.codegend_heapify_helper_fn_));
     RETURN_IF_ERROR(sorter_->Prepare(pool_));
     DCHECK_GE(resource_profile_.min_reservation, sorter_->ComputeMinReservation());
   } else {
@@ -219,6 +219,10 @@ void TopNPlanNode::Codegen(FragmentState* state) {
   if (codegen_status.ok() && is_partitioned()) {
     codegen_status =
         Sorter::TupleSorter::Codegen(state, compare_fn, &codegend_sort_helper_fn_);
+  }
+  if (codegen_status.ok() && is_partitioned()) {
+    codegen_status =
+        SortedRunMerger::Codegen(state, compare_fn, &codegend_heapify_helper_fn_);
   }
   if (codegen_status.ok() && is_partitioned()) {
     // TODO: IMPALA-10228: replace comparisons in std::map.

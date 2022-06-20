@@ -810,6 +810,7 @@ Sorter::Sorter(const TupleRowComparatorConfig& tuple_row_comparator_config,
     int64_t page_len, RuntimeProfile* profile, RuntimeState* state,
     const string& node_label, bool enable_spilling,
     const CodegenFnPtr<SortHelperFn>& codegend_sort_helper_fn,
+    const CodegenFnPtr<SortedRunMerger::HeapifyHelperFn>& codegend_heapify_helper_fn,
     int64_t estimated_input_size)
   : node_label_(node_label),
     state_(state),
@@ -818,6 +819,7 @@ Sorter::Sorter(const TupleRowComparatorConfig& tuple_row_comparator_config,
     compare_less_than_(nullptr),
     in_mem_tuple_sorter_(nullptr),
     codegend_sort_helper_fn_(codegend_sort_helper_fn),
+    codegend_heapify_helper_fn_(codegend_heapify_helper_fn),
     buffer_pool_client_(buffer_pool_client),
     page_len_(page_len),
     has_var_len_slots_(false),
@@ -1354,7 +1356,8 @@ Status Sorter::CreateInmemoryMerger() {
   // from the runs being merged. This is unnecessary overhead that is not required if we
   // correctly transfer resources.
   inmem_merger_.reset(
-      new SortedRunMerger(*compare_less_than_, output_row_desc_, profile_, true));
+      new SortedRunMerger(*compare_less_than_, output_row_desc_, profile_, true,
+          codegend_heapify_helper_fn_));
 
   vector<function<Status (RowBatch**)>> merge_runs;
   merge_runs.reserve(num_runs);
@@ -1383,7 +1386,8 @@ Status Sorter::CreateMerger(int num_runs) {
   // from the runs being merged. This is unnecessary overhead that is not required if we
   // correctly transfer resources.
   merger_.reset(
-      new SortedRunMerger(*compare_less_than_, output_row_desc_, profile_, true));
+      new SortedRunMerger(*compare_less_than_, output_row_desc_, profile_, true,
+          codegend_heapify_helper_fn_));
 
   vector<function<Status (RowBatch**)>> merge_runs;
   merge_runs.reserve(num_runs);

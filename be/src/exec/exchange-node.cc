@@ -53,6 +53,7 @@ Status ExchangePlanNode::Init(const TPlanNode& tnode, FragmentState* state) {
       sort_info.ordering_exprs, *row_descriptor_, state, &ordering_exprs_));
   row_comparator_config_ =
       state->obj_pool()->Add(new TupleRowComparatorConfig(sort_info, ordering_exprs_));
+  DCHECK(row_comparator_config_ != nullptr);
   state->CheckAndAddCodegenDisabledMessage(codegen_status_msgs_);
   return Status::OK();
 }
@@ -120,9 +121,16 @@ void ExchangePlanNode::Codegen(FragmentState* state) {
   PlanNode::Codegen(state);
   if (IsNodeCodegenDisabled()) return;
 
+  Status codegen_status;
+  llvm::Function* compare_fn = nullptr;
   if (row_comparator_config_ != nullptr) {
-    AddCodegenStatus(row_comparator_config_->Codegen(state));
+    codegen_status = row_comparator_config_->Codegen(state, &compare_fn);
   }
+  if (codegen_status.ok() && compare_fn != nullptr) {
+    codegen_status =
+        SortedRunMerger::Codegen(state, compare_fn, &codegend_heapify_helper_fn_);
+  }
+  AddCodegenStatus(codegen_status);
 }
 
 Status ExchangeNode::Open(RuntimeState* state) {
@@ -130,12 +138,13 @@ Status ExchangeNode::Open(RuntimeState* state) {
   ScopedOpenEventAdder ea(this);
   RETURN_IF_ERROR(ExecNode::Open(state));
   RETURN_IF_CANCELLED(state);
+  const ExchangePlanNode& pnode = static_cast<const ExchangePlanNode&>(plan_node_);
   if (is_merging_) {
     // CreateMerger() will populate its merging heap with batches from the stream_recvr_,
     // so it is not necessary to call FillInputRowBatch().
     RETURN_IF_ERROR(
         less_than_->Open(pool_, state, expr_perm_pool(), expr_results_pool()));
-    RETURN_IF_ERROR(stream_recvr_->CreateMerger(*less_than_.get()));
+    RETURN_IF_ERROR(stream_recvr_->CreateMerger(*less_than_.get(), pnode.codegend_heapify_helper_fn_));
   } else {
     RETURN_IF_ERROR(FillInputRowBatch(state));
   }

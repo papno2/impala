@@ -79,7 +79,8 @@ Status PartialSortNode::Prepare(RuntimeState* state) {
   sorter_.reset(
       new Sorter(tuple_row_comparator_config_, sort_tuple_exprs_, &row_descriptor_,
           mem_tracker(), buffer_pool_client(), resource_profile_.spillable_buffer_size,
-          runtime_profile(), state, label(), false, pnode.codegend_sort_helper_fn_));
+          runtime_profile(), state, label(), false, pnode.codegend_sort_helper_fn_,
+          pnode.codegend_heapify_helper_fn_));
   RETURN_IF_ERROR(sorter_->Prepare(pool_));
   DCHECK_GE(resource_profile_.min_reservation, sorter_->ComputeMinReservation());
   input_batch_.reset(
@@ -95,6 +96,8 @@ void PartialSortPlanNode::Codegen(FragmentState* state) {
   AddCodegenStatus(row_comparator_config_->Codegen(state, &compare_fn));
   AddCodegenStatus(
       Sorter::TupleSorter::Codegen(state, compare_fn, &codegend_sort_helper_fn_));
+  AddCodegenStatus(
+      SortedRunMerger::Codegen(state, compare_fn, &codegend_heapify_helper_fn_));
 }
 
 Status PartialSortNode::Open(RuntimeState* state) {
