@@ -116,7 +116,7 @@ fi
 if [ "${WAREHOUSE_LOCATION_PREFIX}" != "" ]; then
   echo "Updating Iceberg locations with warehouse prefix ${WAREHOUSE_LOCATION_PREFIX}"
   ${IMPALA_HOME}/testdata/bin/rewrite-iceberg-metadata.py ${WAREHOUSE_LOCATION_PREFIX} \
-      $(find ${SNAPSHOT_STAGING_DIR}${TEST_WAREHOUSE_DIR}/iceberg_test -name "metadata")
+      $(find ${SNAPSHOT_STAGING_DIR}${TEST_WAREHOUSE_DIR} -name "metadata")
 fi
 
 echo "Copying data to ${TARGET_FILESYSTEM}"
