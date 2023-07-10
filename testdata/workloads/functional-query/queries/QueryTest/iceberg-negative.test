@@ -721,9 +721,19 @@ delete from ice_delete where i = 1;
 AnalysisException: Impala can only write delete files in PARQUET, but the given table uses a different file format: $DATABASE.ice_delete
 ====
 ---- QUERY
-# Cannot delete from Iceberg table is write mode is not 'merge-on-read'
+# Cannot delete from Iceberg table if write mode is not 'merge-on-read'
 alter table ice_delete set tblproperties ('write.delete.format.default'='PARQUET', 'write.delete.mode'='copy-on-write');
 delete from ice_delete where i = 1;
 ---- CATCH
 AnalysisException: Unsupported delete mode: 'copy-on-write' for Iceberg table: $DATABASE.ice_delete
+====
+---- QUERY
+optimize non_iceberg_table;
+---- CATCH
+AnalysisException: OPTIMIZE is only supported for Iceberg tables.
+====
+---- QUERY
+optimize iceberg_overwrite_bucket;
+---- CATCH
+AnalysisException: The Iceberg table has multiple partition specs. This means the outcome of dynamic partition overwrite is unforeseeable. Consider using TRUNCATE and INSERT INTO to overwrite your table.
 ====

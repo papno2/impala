@@ -1234,3 +1234,6 @@ class TestIcebergV2Table(IcebergTestSuite):
     hive_output = self.run_stmt_in_hive("SELECT id FROM {} ORDER BY id".format(ice_t))
     # Test that Hive sees the same rows deleted.
     assert hive_output == "id\n4\n5\n6\n7\n8\n"
+
+  def test_optimize(self, vector, unique_database):
+    self.run_test_case('QueryTest/iceberg-optimize', vector, unique_database)

@@ -1,0 +1,84 @@
+====
+---- QUERY
+SET NUM_NODES=1;
+CREATE TABLE ice_optimize (i int, s string)
+STORED BY ICEBERG
+TBLPROPERTIES ('format-version'='2');
+====
+---- QUERY
+# Insert rows one by one to write multiple small files.
+INSERT INTO ice_optimize VALUES(1, 'one');
+INSERT INTO ice_optimize VALUES(2, 'two');
+INSERT INTO ice_optimize VALUES(3, 'three');
+SHOW FILES IN ice_optimize;
+---- LABELS
+Path,Size,Partition,EC Policy
+---- RESULTS: VERIFY_IS_SUBSET
+row_regex:'$NAMENODE/test-warehouse/$DATABASE.db/ice_optimize/data/.*.0.parq','.*','','$ERASURECODE_POLICY'
+row_regex:'$NAMENODE/test-warehouse/$DATABASE.db/ice_optimize/data/.*.0.parq','.*','','$ERASURECODE_POLICY'
+row_regex:'$NAMENODE/test-warehouse/$DATABASE.db/ice_optimize/data/.*.0.parq','.*','','$ERASURECODE_POLICY'
+---- TYPES
+STRING, STRING, STRING, STRING
+====
+---- QUERY
+# OPTIMIZE should create 1 data file.
+OPTIMIZE ice_optimize;
+SHOW FILES IN ice_optimize;
+---- LABELS
+Path,Size,Partition,EC Policy
+---- RESULTS: VERIFY_IS_SUBSET
+row_regex:'$NAMENODE/test-warehouse/$DATABASE.db/ice_optimize/data/.*.0.parq','.*','','$ERASURECODE_POLICY'
+---- TYPES
+STRING, STRING, STRING, STRING
+====
+---- QUERY
+SELECT * FROM ice_optimize;
+---- RESULTS
+1,'one'
+2,'two'
+3,'three'
+---- TYPES
+INT,STRING
+====
+---- QUERY
+DELETE FROM ice_optimize WHERE i = 2;
+SHOW FILES IN ice_optimize;
+---- LABELS
+Path,Size,Partition,EC Policy
+---- RESULTS: VERIFY_IS_SUBSET
+row_regex:'$NAMENODE/test-warehouse/$DATABASE.db/ice_optimize/data/.*.0.parq','.*','','$ERASURECODE_POLICY'
+row_regex:'$NAMENODE/test-warehouse/$DATABASE.db/ice_optimize/data/delete-.*parq','.*','','$ERASURECODE_POLICY'
+---- TYPES
+STRING, STRING, STRING, STRING
+====
+---- QUERY
+OPTIMIZE ice_optimize;
+SHOW FILES IN ice_optimize;
+---- LABELS
+Path,Size,Partition,EC Policy
+---- RESULTS: VERIFY_IS_SUBSET
+row_regex:'$NAMENODE/test-warehouse/$DATABASE.db/ice_optimize/data/.*.0.parq','.*','','$ERASURECODE_POLICY'
+---- TYPES
+STRING, STRING, STRING, STRING
+====
+---- QUERY
+SELECT * FROM ice_optimize;
+---- RESULTS
+1,'one'
+3,'three'
+---- TYPES
+INT,STRING
+====
+---- QUERY
+ALTER TABLE ice_optimize DROP COLUMN s;
+ALTER TABLE ice_optimize ADD COLUMN b BOOLEAN;
+INSERT INTO ice_optimize VALUES(4, true);
+OPTIMIZE ice_optimize;
+SELECT * FROM ice_optimize;
+---- RESULTS
+1,NULL
+3,NULL
+4,true
+---- TYPES
+INT,BOOLEAN
+====
