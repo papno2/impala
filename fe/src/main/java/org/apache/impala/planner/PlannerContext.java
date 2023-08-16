@@ -103,7 +103,8 @@ public class PlannerContext {
   public PlanNodeId getNextNodeId() { return nodeIdGenerator_.getNextId(); }
   public PlanFragmentId getNextFragmentId() { return fragmentIdGenerator_.getNextId(); }
   public boolean isInsertOrCtas() {
-    return analysisResult_.isInsertStmt() || analysisResult_.isCreateTableAsSelectStmt();
+    return analysisResult_.isInsertStmt() || analysisResult_.isCreateTableAsSelectStmt()
+            || analysisResult_.isOptimizeStmt();
   }
   public boolean isInsert() { return analysisResult_.isInsertStmt(); }
   public boolean isCtas() { return analysisResult_.isCreateTableAsSelectStmt(); }
